@@ -6,10 +6,10 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.externals import joblib
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import r2_score
-from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
 
 import settings
+from base import BaseMixin
 
 
 def _load_lines(features, target, data_file):
@@ -43,8 +43,8 @@ def load_data(file_name, features=settings.features, target='O_USETIME'):
 
 def fit(X_train, y_train, X_test, y_test):
     "raw"
-    gbdt0 = GradientBoostingRegressor(loss='huber', learning_rate=0.4,
-                                      n_estimators=600, subsample=0.7,
+    gbdt0 = GradientBoostingRegressor(loss='huber', learning_rate=0.2,
+                                      n_estimators=500, subsample=0.7,
                                       min_samples_split=100,
                                       min_samples_leaf=20)
     gbdt0.fit(X_train, y_train)
@@ -63,93 +63,33 @@ def fit(X_train, y_train, X_test, y_test):
     return gbdt0
 
 
-def search_parameters(X, y):
-    """
-    gridSearchCV
-    :return:
-    """
-    # step 1
-    param = {'n_estimators': range(300, 450, 50)}
-    search_estimators = GridSearchCV(
-        estimator=GradientBoostingRegressor(loss='huber', learning_rate=0.5,
-                                            min_samples_split=100,
-                                            min_samples_leaf=20, max_depth=8,
-                                            subsample=0.8), param_grid=param,
-        scoring='roc_auc', n_jobs=-1)
-    search_estimators.fit(X, y)
-    n_estimators = search_estimators.cv_results_['params'][
-        search_estimators.best_index_].get('n_estimators', 81)
-    print('search_estimators', n_estimators)
-
-    param2 = {'max_depth': range(2, 10),
-              'min_samples_split': range(50, 301, 50)}
-    search_tree_depth = GridSearchCV(
-        estimator=GradientBoostingRegressor(n_estimators=n_estimators,
-                                            loss='huber', learning_rate=0.1,
-                                            min_samples_leaf=20, subsample=0.8),
-        param_grid=param2, scoring='roc_auc', n_jobs=-1)
-    search_tree_depth.fit(X, y)
-    result = search_tree_depth.cv_results_['params'][
-        search_tree_depth.best_index_]
-    print('search_tree_depth', result)
-    max_depth = result.get('max_depth')
-    # step 3
-    param3 = {'min_samples_split': range(50, 301, 100),
-              'min_samples_leaf': range(20, 401, 10)}
-    search_tree_node = GridSearchCV(
-        estimator=GradientBoostingRegressor(n_estimators=n_estimators,
-                                            loss='huber', learning_rate=0.1,
-                                            subsample=0.8, max_depth=max_depth),
-        param_grid=param3, scoring='roc_auc', n_jobs=-1)
-    search_tree_node.fit(X, y)
-    result = search_tree_node.cv_results_['params'][
-        search_tree_depth.best_index_]
-    print(result)
-    import pdb
-    pdb.set_trace()
-    return result
-
-
-def parse(y_test, y_predict):
-    y_diff = y_test - y_predict
-    y_diff_arg = np.argsort(y_diff)
-
-
-class Train:
+class Train(BaseMixin):
     def __init__(self):
         """
         for all lines
         """
         self.models = {}
-
-    def get_lines(self,
-                  file=os.path.join('predict', 'toBePredicted_forUser.csv')):
-        df = pd.read_csv(file)
-        self.lines = sorted(df['O_LINENO'].drop_duplicates().tolist())
+        self.get_predict_info()
 
     def fit(self):
-        it = 0
-        for line in [652, 808, 856, 800, 912, 665, 850]:
-            # for jt in range(75):
-            #     line = self.lines[it*75+jt]
-            # for line in self.lines:
-            #     filename = os.path.join('output','{}.pickle'.format(line))
-            # if os.path.exists(filename):
-            #     continue
+        for line in self.predict_lines:
+            model_name = os.path.join('output', '{}.pickle'.format(line))
             print('line:', line)
-            # file_name = os.path.join('fit','onestop_{}.csv'.format(line))
             file_name = os.path.join('fit', 'onestop_{}.csv'.format(line))
             X, y, X_test, y_test = load_data(file_name)
             if len(X) != 0:
                 my_model = fit(X, y, X_test, y_test)
-                # joblib.dump(my_model, filename)
+                joblib.dump(my_model, model_name)
 
     def adjust_fit(self):
         import time
         start = time.time()
-        file_name = os.path.join(settings.PredictPath,'predict_valid_result.csv')
-        X_train,y_train,X_test,y_test = load_data(file_name,settings.adjust_feature,'time_diff')
-        if len(X_train)!=0:
+        file_name = os.path.join(settings.PredictPath,
+                                 'predict_valid_result.csv')
+        X_train, y_train, X_test, y_test = load_data(file_name,
+                                                     settings.adjust_feature,
+                                                     'time_diff')
+        if len(X_train) != 0:
             # ad_model = fit(X,y,X_test,y_test)
             gbdt0 = GradientBoostingRegressor(loss='huber', learning_rate=0.3,
                                               n_estimators=600, subsample=0.7,
@@ -168,29 +108,12 @@ class Train:
             mse_raw = mean_squared_error(y_train, y_predict_train)
             print('train mse:', mse_raw)
             print('feature importance:', gbdt0.feature_importances_)
-            joblib.dump(gbdt0, os.path.join(settings.ModelPath,'adjust_1.pickle'))
-        print('use time:',time.time()-start)
+            joblib.dump(gbdt0,
+                        os.path.join(settings.ModelPath, 'adjust_1.pickle'))
+        print('use time:', time.time() - start)
         return
-
-
-    def search_param(self):
-        target = 'O_USETIME'
-        for line in [652, 808, 856, 800, 912, 665, 850]:
-            filename = os.path.join('output', 'sp', '{}.pickle'.format(line))
-            # if os.path.exists(filename):
-            #     continue
-            print('line:', line)
-            # file_name = os.path.join('fit','onestop_{}.csv'.format(line))
-            file_name = os.path.join('fit', 'onestop_{}.csv'.format(line))
-            X, y = _load_lines(settings.features, target, file_name)
-            if len(X) != 0:
-                my_model = search_parameters(X, y)
-                joblib.dump(my_model, filename)
 
 
 if __name__ == "__main__":
     train = Train()
-    # train.get_lines()
-    train.adjust_fit()
-    # train.fit()
-    # train.search_param()
+    train.fit()

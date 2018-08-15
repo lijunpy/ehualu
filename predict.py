@@ -9,9 +9,6 @@ from sklearn.externals import joblib
 import settings
 from base import BaseMixin, other_data
 
-
-# from new_process import concat_df
-
 def concat_df(df, df_new):
     if df.size:
         df = pd.concat([df, df_new])
@@ -466,52 +463,10 @@ class Predict(BaseMixin):
         return
 
 
-def pred(self):
-    # score:0.4068
-    df_predict = pd.read_csv(os.path.join(self.path, 'predict_check_1.csv'))
-    df_predict.loc[:, 'O_HOUR'] = df_predict.predHour.apply(
-        lambda x: x.split(':')[0])
-    new_records = []
-    for line in self.predict_lines:
-        print(line)
-        df_line = df_predict[df_predict['O_LINENO'] == line]
-        try:
-            linemodel = joblib.load(
-                os.path.join('output', '{}.pickle'.format(line)))
-            records = df_line.to_dict(orient='records')
-            for record in records:
-                results = []
-                base_time = -int(record['time_delta'])
-
-                for it in range(record['pred_start_stop_ID'],
-                                record['pred_end_stop_ID'] + 1):
-                    record['O_NEXTSTATIONNO'] = it + 1
-                    inputs = np.array(
-                        [record[feature] for feature in settings.features])
-                    y = linemodel.predict(inputs.reshape(1, -1))
-                    base_time += int(y[0])
-                    results.append(base_time)
-                result = ';'.join(map(str, results))
-                record['pred_timeStamps'] = result
-                new_records.append(record)
-        except:
-            print('error')
-    df_result = pd.DataFrame(new_records)
-    df_result.sort_values(by='O_ORDER')
-    df_result.to_csv('result.csv')
-
-    columns = ['O_UP', 'O_TERMINALNO', 'O_NEXTSTATIONNO', 'O_HOUR',
-               'O_WEEKDAY', ]
-
 
 if __name__ == '__main__':
-    predict_train = Predict()
-    # predict_train.outlet()
-    predict_train.predict()
-    # predict_train.similar_data()
-    # predict_train.parse_valid_result()
-    # predict_train.convert()
-    # predict_train.valid()
-    # predict_train.check_predict()
-    # predict_train.pred_detail()
-    # predict_train.outlet_detail()
+    predict = Predict()
+    # convert predict file:toBePredicted_forUser.csv
+    predict.convert()
+    # predict result and outlet
+    predict.predict()
