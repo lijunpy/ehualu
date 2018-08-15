@@ -124,9 +124,21 @@ def _get_date(it):
     return date_str, date_base
 
 
-class PreProcess(BaseMixin):
+class Process(BaseMixin):
     def __init__(self):
+        self.start = None
+        self.end = None
         self.get_predict_info()
+
+    def set_date_range(self, start, end):
+        assert start < end
+        self.start = start
+        self.end = end
+
+
+class PreProcess(Process):
+    def __init__(self):
+        super(PreProcess, self).__init__()
         self.file_path = 'train'
 
     def _first_step(self, df_raw, date_str, date_base, keep='first'):
@@ -181,18 +193,16 @@ class PreProcess(BaseMixin):
         return
 
     def process(self):
-        for it in range(1, 32):
+        for it in range(self.start, self.end + 1):
             self._process(it)
         return
 
 
-class LineAnalysis(BaseMixin):
+class LineAnalysis(PreProcess):
     def __init__(self):
-        self.start = None
-        self.end = None
+        super(LineAnalysis, self).__init__()
         self.file_path = settings.FitPath
         self.result_file_path = 'fit'
-        self.get_predict_info()
 
     def set_file(self, file_path):
         self.file_path = file_path
@@ -206,11 +216,6 @@ class LineAnalysis(BaseMixin):
         self.onestop_outlier_file = os.path.join(self.result_file_path,
                                                  'onestop_{}_out.csv'.format(
                                                      lineno))
-
-    def set_date_range(self, start, end):
-        assert start < end
-        self.start = start
-        self.end = end
 
     def _line_process(self):
         # raw record
@@ -263,8 +268,9 @@ if __name__ == '__main__':
 
     start = time.time()
     preprocess = PreProcess()
+    preprocess.set_date_range(1,31)
     preprocess.process()
     la = LineAnalysis()
-    la.set_date_range(1,31)
+    la.set_date_range(1, 31)
     la.process()
     print('use time', time.time() - start)

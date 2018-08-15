@@ -1,0 +1,16 @@
+#Mac:
+.idea
+.DS_Store
+
+# Python:
+*.py[cod]
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+# my config:
+/fit/
+/test/
+
