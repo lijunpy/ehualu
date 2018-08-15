@@ -4,11 +4,12 @@ import os
 
 import numpy as np
 import pandas as pd
-# from reshape import toBePredict
-from sklearn.ensemble import IsolationForest
 
 import settings
 from base import BaseMixin, other_data
+
+
+# from reshape import toBePredict
 
 
 # from sklearn.neighbors import LocalOutlierFactor
@@ -30,6 +31,15 @@ def calc_buses(csv_file):
                                header=['records_number', ])
     print('use time', time.time() - start_time)
     return
+
+
+def _is_workday(it):
+    d_date = datetime.date(2017, 10, it)
+    return (d_date > datetime.date(2017, 10, 8)) & (d_date.isoweekday() < 6)
+
+
+def _get_weather(d_str):
+    return settings.weather_201710[int(d_str[-2:])]
 
 
 def _write(df, file_name, index=False):
@@ -65,16 +75,6 @@ def _subsection(df):
     updown_index = sorted(list(set(up_index + time_index + stop_index)))
     # + [0, size - 1]
     return [0] + updown_index + [size - 1]
-
-
-def calc_weekday(x):
-    if not isinstance(x,str):
-        x = str(x)
-    d_date = datetime.date(int(x[:4]), int(x[4:6]), int(x[6:]))
-    if d_date > datetime.date(2017, 10, 8):
-        return d_date.isoweekday()
-    else:
-        return 8
 
 
 def process_terminal(df_terminal, keep='first'):
@@ -116,19 +116,20 @@ def process_terminal(df_terminal, keep='first'):
     return df_terminal_processed
 
 
+def _get_date(it):
+    date_str = '201710{}'.format(str(it).zfill(2))
+    date_base = datetime.datetime.combine(
+        datetime.datetime.strptime(date_str, '%Y%m%d').date(),
+        datetime.time(5, 0, 0))
+    return date_str, date_base
+
+
 class PreProcess(BaseMixin):
     def __init__(self):
-        self.date_str = None
-        self.date_base = None
         self.get_predict_info()
+        self.file_path = 'train'
 
-    def _get_date(self, it):
-        self.date_str = '201710{}'.format(str(it).zfill(2))
-        self.date_base = datetime.datetime.combine(
-            datetime.datetime.strptime(self.date_str, '%Y%m%d').date(),
-            datetime.time(5, 0, 0))
-
-    def _first_step(self, df_raw, keep='first'):
+    def _first_step(self, df_raw, date_str, date_base, keep='first'):
         """
 
         :param it:
@@ -147,10 +148,10 @@ class PreProcess(BaseMixin):
             df_opt = df_opt[df_opt['O_TERMINALNO'].isin(self.predict_terminals)]
 
         def date_parser(time):
-            return ' '.join([self.date_str, time])
+            return ' '.join([date_str, time])
 
         df_convert = pd.to_datetime(df_opt['O_TIME'].apply(date_parser))
-        df_converted = ((df_convert - self.date_base) / pd.Timedelta('1s'))
+        df_converted = ((df_convert - date_base) / pd.Timedelta('1s'))
         df_opt.loc[:, 'O_RELATIVETIME'] = df_converted
         return df_opt
 
@@ -166,77 +167,30 @@ class PreProcess(BaseMixin):
             df_processed = concat_df(df_processed, df_terminal_processed)
         return df_processed
 
-    def process(self, it, file_path):
+    def _process(self, it):
         start_time = time.time()
-        self._get_date(it)
-
-        df_raw = pd.read_csv('{}/train{}.csv'.format(file_path, self.date_str),
+        date_str, date_base = _get_date(it)
+        df_raw = pd.read_csv('{}/train{}.csv'.format(self.file_path, date_str),
                              dtype=settings.dtype_raw)
         print('read csv, use time', time.time() - start_time)
-        df_opt = self._first_step(df_raw)
+        df_opt = self._first_step(df_raw, date_str, date_base)
         print('first step, use time', time.time() - start_time)
         df_processed = self._second_step(df_opt)
-        _write(df_processed,
-               '{}/processed_t_{}.csv'.format(file_path, self.date_str))
+        obj_file = '{}/processed_t_{}.csv'.format(self.file_path, date_str)
+        _write(df_processed, obj_file)
         return
 
-
-def outlier_detection(df):
-    if df.empty:
-        return df
-    df_detection = df.dropna()
-    df_train = df_detection.loc[:, features]
-    odf_iforest = IsolationForest(n_estimators=200, random_state=666, n_jobs=-1)
-    X_train = np.array(df_train)
-    odf_iforest.fit(X_train)
-    y_train_predict = odf_iforest.predict(X_train)
-    df_detection.loc[:, 'O_OUTLIER_IFOREST'] = y_train_predict
-    odf_lof = LocalOutlierFactor(n_neighbors=30)
-    # odf_lof.fit(X_train)
-    y_train_predict_lof = odf_lof.fit_predict(X_train)
-    df_detection.loc[:, 'O_OUTLIER_LOF'] = y_train_predict_lof
-    df_detection.loc[:, 'O_BOTH_OUTLIER'] = (y_train_predict_lof == -1) & (
-        y_train_predict == -1)
-    df_detection.loc[:, 'O_BOTH_INLIER'] = (y_train_predict_lof == 1) & (
-        y_train_predict == 1)
-    return df_detection[df_detection['O_BOTH_INLIER']]
-
-
-def _is_workday(it):
-    d_date = datetime.date(2017, 10, it)
-    return (d_date > datetime.date(2017, 10, 8)) & (d_date.isoweekday() < 6)
-
-
-def _get_weather(d_str):
-    return settings.weather_201710[int(d_str[-2:])]
-
-def calc_weekday(x):
-    if not isinstance(x,str):
-        x = str(x)
-    d_date = datetime.date(int(x[:4]), int(x[4:6]), int(x[6:]))
-    if d_date > datetime.date(2017, 10, 8):
-        return d_date.isoweekday()
-    else:
-        return 8
-
-def _calc_workday(x):
-    return _is_workday(int(str(x)[-2:]))
-
-
-
-def _add_weekday(lineno):
-    file_name = os.path.join('fit', 'onestop_{}.csv'.format(lineno))
-    df = pd.read_csv(file_name)
-    df.loc[:, 'O_WEEKDAY'] = df.O_DATE.apply(calc_weekday)
-    df.loc[:,'IS_WORKDAY'] = df.O_DATE.apply(_calc_workday)
-    df.to_csv(file_name, index=False)
+    def process(self):
+        for it in range(11, 32):
+            self._process(it)
+        return
 
 
 class LineAnalysis(BaseMixin):
     def __init__(self):
         self.start = None
         self.end = None
-        self.file_path = ''
+        self.file_path = settings.FitPath
         self.result_file_path = 'fit'
         self.get_predict_info()
 
@@ -258,7 +212,7 @@ class LineAnalysis(BaseMixin):
         self.start = start
         self.end = end
 
-    def line_process(self):
+    def _line_process(self):
         # raw record
         df_line = pd.DataFrame()
         df_onestop = pd.DataFrame()
@@ -294,33 +248,23 @@ class LineAnalysis(BaseMixin):
 
             else:
                 print(date_str, ' has not line:{} data'.format(self.lineno))
-        _write(df_line, self.raw_file)
+        # _write(df_line, self.raw_file)
         _write(df_onestop, self.onestop_file)
         return df_line
 
-    def drop_outlier(self):
-        df = pd.read_csv(
-            os.path.join('fit', 'onestop_{}.csv'.format(self.lineno)))
-        df_detect = outlier_detection(df)
-        _write(df_detect, os.path.join('fit', 'drop_outlier',
-                                       '{}.csv'.format(self.lineno)))
-
-    def add_weekday(self):
-        for it,line in enumerate(self.predict_lines):
-            print(it,line)
-            _add_weekday(line)
+    def process(self):
+        for line in self.predict_lines:
+            self.set_lineno(line)
+            self._line_process()
 
 
 if __name__ == '__main__':
-    # _for_predict()
-    # process = PreProcess()
-    # for it in range(17, 19):
-    #     process.process(it, file_path='train', init=True)
-    # process.process(25, file_path='train', init=True)
     import time
+
     start = time.time()
+    preprocess = PreProcess()
+    preprocess.process()
     la = LineAnalysis()
-    la.add_weekday()
-
-
+    la.set_date_range(11,31)
+    la.process()
     print('use time', time.time() - start)
