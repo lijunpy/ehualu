@@ -466,4 +466,7 @@ class Predict(BaseMixin):
 
 if __name__ == '__main__':
     predict = Predict()
+    # convert predict file:toBePredicted_forUser.csv
+    predict.convert()
+    # predict result and outlet
     predict.predict()

@@ -144,8 +144,8 @@ class PreProcess(BaseMixin):
         #                                 keep=keep).copy()
         df_opt = df_raw.loc[:, ['O_LINENO', 'O_TERMINALNO', 'O_TIME', 'O_UP',
                                 'O_NEXTSTATIONNO']]
-        if self.predict_terminals:
-            df_opt = df_opt[df_opt['O_TERMINALNO'].isin(self.predict_terminals)]
+
+        df_opt = df_opt[df_opt['O_TERMINALNO'].isin(self.predict_terminals)]
 
         def date_parser(time):
             return ' '.join([date_str, time])
@@ -181,7 +181,7 @@ class PreProcess(BaseMixin):
         return
 
     def process(self):
-        for it in range(11, 32):
+        for it in range(1, 32):
             self._process(it)
         return
 
@@ -265,6 +265,6 @@ if __name__ == '__main__':
     preprocess = PreProcess()
     preprocess.process()
     la = LineAnalysis()
-    la.set_date_range(11,31)
+    la.set_date_range(1,31)
     la.process()
     print('use time', time.time() - start)
