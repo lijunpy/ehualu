@@ -14,21 +14,23 @@ DC竞赛 易华录杯 公交线路准点预测 比赛代码。
 1. 将所有原始数据放到 train 文件夹下；
    备注：也可以存放部分文件，处理时，需要更改train.py 文件中，train函数的start,enc
    参数值，start 为起始日期，end 为结束日期，使用1到31 之间的整型数值即可。
-2. 运行 train.py 文件训练模型；
-3. 运行 predict.py 文件计算结果。
+   
+2. 运行 preprocess.py 文件进行数据预处理， 
+3. 运行 train.py 文件训练模型；
+4. 运行 predict.py 文件计算结果。
 
 
 ## 代码结构：
 
-utils.py --通用函数；
+utils.py --通用函数；代码中用到的一般函数。
 
 settings.py --配置参数；
 
-base.py --基础类；
+base.py --基础类；代码中preprocess.py、fit.py 和 predict.py 中用到的通用类；
 
 preprocess.py --预处理；
 
-fit.py --拟合；
+fit.py --对每条线路进行拟合；
 
 predict.py --预测；
 
